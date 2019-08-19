@@ -74,14 +74,14 @@ CONST num ROS_MSG_MAX_JOINTS := 10;  ! from joint_data.h
 
 PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_joint_traj_pt message, \num wait_time)
     VAR ROS_msg raw_message;
-    
+
     ! Read raw message data
     IF Present(wait_time) THEN
         ROS_receive_msg client_socket, raw_message, \wait_time:=wait_time;
     ELSE
         ROS_receive_msg client_socket, raw_message;
     ENDIF
-    
+
     ! Integrity Check: Message Type
     IF (raw_message.header.msg_type <> ROS_MSG_TYPE_JOINT_TRAJ_PT) THEN
         ErrWrite \W, "ROS Socket Type Mismatch", "Unexpected message type",
@@ -89,7 +89,7 @@ PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_join
                 \RL3:="received: " + ValToStr(raw_message.header.msg_type);
         RAISE ERR_ARGVALERR;  ! TBD: define specific error code
     ENDIF
-    
+
     ! Integrity Check: Data Size
     IF (RawBytesLen(raw_message.data) < 52) THEN
         ErrWrite \W, "ROS Socket Missing Data", "Insufficient data for joint_trajectory_pt",
@@ -97,10 +97,9 @@ PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_join
                 \RL3:="received: " + ValToStr(RawBytesLen(raw_message.data));
         RAISE ERR_OUTOFBND;  ! TBD: define specific error code
     ENDIF
-    
+
     ! Copy Header data
     message.header := raw_message.header;
-    
     ! Unpack data fields
     UnpackRawBytes raw_message.data, 1, message.sequence_id, \IntX:=DINT;
     UnpackRawBytes raw_message.data, 5, message.joints.rax_1, \Float4;
@@ -118,9 +117,9 @@ PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_join
 
     ! Convert data from ROS units to ABB units
     message.joints := rad2deg_robjoint(message.joints);
-    message.ext_axes := m2mm_extjoint(message.ext_axes);
+    message.ext_axes := rad2deg_extjoint(message.ext_axes);
     ! TBD: convert velocity
-    
+
 ERROR
     RAISE;  ! raise errors to calling code
 ENDPROC
@@ -130,17 +129,15 @@ PROC ROS_send_msg_joint_data(VAR socketdev client_socket, ROS_msg_joint_data mes
     VAR robjoint ROS_joints;
     VAR extjoint ROS_ext_axes;
     VAR num i;
-    
+
     ! Force message header to the correct values
     raw_message.header.msg_type := ROS_MSG_TYPE_JOINT;
     raw_message.header.comm_type := ROS_COM_TYPE_TOPIC;
     raw_message.header.reply_code := ROS_REPLY_TYPE_INVALID;
-    
+
     ! Convert data from ABB units to ROS units
     ROS_joints := deg2rad_robjoint(message.joints);
-    ROS_ext_axes := mm2m_extjoint(message.ext_axes);
-
-    ! Pack data into message
+    ROS_ext_axes := deg2rad_extjoint(message.ext_axes);
     PackRawBytes message.sequence_id, raw_message.data,  1, \IntX:=DINT;
     PackRawBytes ROS_joints.rax_1,    raw_message.data,  5, \Float4;
     PackRawBytes ROS_joints.rax_2,    raw_message.data,  9, \Float4;
@@ -171,25 +168,13 @@ LOCAL FUNC num connected_eax(num eax)
     RETURN 0;
 ENDFUNC
 
-! Returns only connected external axes in METERS
-LOCAL FUNC extjoint mm2m_extjoint(extjoint all_eax)
-    VAR extjoint eax;
-    eax.eax_a := connected_eax(all_eax.eax_a) / 1000;
-    eax.eax_b := connected_eax(all_eax.eax_b) / 1000;
-    eax.eax_c := connected_eax(all_eax.eax_c) / 1000;
-    eax.eax_d := connected_eax(all_eax.eax_d) / 1000;
-    RETURN eax;
-ENDFUNC
-
-! Returns external axes in MILLIMETERS
-LOCAL FUNC extjoint m2mm_extjoint(extjoint eax_in_m)
-    VAR extjoint eax_in_mm;
-    eax_in_mm.eax_a := eax_in_m.eax_a * 1000;
-    eax_in_mm.eax_b := eax_in_m.eax_b * 1000;
-    eax_in_mm.eax_c := eax_in_m.eax_c * 1000;
-    eax_in_mm.eax_d := eax_in_m.eax_d * 1000;
-    
-    RETURN eax_in_mm;
+LOCAL FUNC extjoint deg2rad_extjoint(extjoint deg)
+    VAR extjoint rad;
+    rad.eax_a := deg2rad(connected_eax(deg.eax_a));
+    rad.eax_b := deg2rad(connected_eax(deg.eax_b));
+    rad.eax_c := deg2rad(connected_eax(deg.eax_c));
+    rad.eax_d := deg2rad(connected_eax(deg.eax_d));
+    RETURN rad;
 ENDFUNC
 
 LOCAL FUNC robjoint deg2rad_robjoint(robjoint deg)
@@ -208,6 +193,15 @@ LOCAL FUNC num rad2deg(num rad)
     RETURN rad * 180 / pi;
 ENDFUNC
 
+LOCAL FUNC extjoint rad2deg_extjoint(extjoint rad)
+    VAR extjoint deg;
+    deg.eax_a := rad2deg(rad.eax_a);
+    deg.eax_b := rad2deg(rad.eax_b);
+    deg.eax_c := rad2deg(rad.eax_c);
+    deg.eax_d := rad2deg(rad.eax_d);
+    RETURN deg;
+ENDFUNC
+
 LOCAL FUNC robjoint rad2deg_robjoint(robjoint rad)
     VAR robjoint deg;
     deg.rax_1 := rad2deg(rad.rax_1);
@@ -216,7 +210,7 @@ LOCAL FUNC robjoint rad2deg_robjoint(robjoint rad)
     deg.rax_4 := rad2deg(rad.rax_4);
     deg.rax_5 := rad2deg(rad.rax_5);
     deg.rax_6 := rad2deg(rad.rax_6);
-    
+
     RETURN deg;
 ENDFUNC
 
