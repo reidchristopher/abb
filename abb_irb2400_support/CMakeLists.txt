@@ -1,15 +1,9 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.8)
 project(abb_irb2400_support)
 
-find_package(catkin REQUIRED)
-
-catkin_package()
-
-if (CATKIN_ENABLE_TESTING)
-  find_package(roslaunch REQUIRED)
-  roslaunch_add_file_check(tests/roslaunch_test_2400.xml)
-  roslaunch_add_file_check(tests/roslaunch_test_2400_12_155.xml)
-endif()
+find_package(ament_cmake REQUIRED)
 
 install(DIRECTORY config launch meshes urdf
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+  DESTINATION share/${PROJECT_NAME}/)
+
+ament_package()
